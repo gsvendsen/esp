@@ -13,3 +13,4 @@ web-report/
 .env.staging
 .env.production
 config.js
+yarn-error.log
