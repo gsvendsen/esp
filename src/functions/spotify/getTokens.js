@@ -23,7 +23,6 @@ export default getTokens = async () => {
         }`,
       });
       const responseJson = await response.json();
-      console.log("ResponseJSON: ", responseJson)
       // Destructure the response and rename the properties to be in camelCase
       const {
         access_token: accessToken,
