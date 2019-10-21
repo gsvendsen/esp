@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import { Text, View, Button, ScrollView, Image, TouchableOpacity, Linking } from 'react-native';
 import styled from 'styled-components'
+import { LinearGradient } from 'expo-linear-gradient';
 
 import getTokens from './src/functions/spotify/getTokens'
 import getSpotifyUserId from './src/functions/spotify/getSpotifyUserId'
@@ -21,6 +22,7 @@ export default function App() {
   const [recommendations, setRecommendations] = useState(null);
   const [newSong, setNewSong] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
 
   const [selectingPlaylist, setSelectingPlaylist] = useState(false);
 
@@ -36,13 +38,15 @@ export default function App() {
     setIsConnected(true)
   }
 
-  const selectPlaylist = async (id) => {
-    let response = await fetch(`https://api.spotify.com/v1/playlists/${id}`, { 
+  const selectPlaylist = async (playlist) => {
+    let response = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}`, { 
       method: 'GET', 
       headers: new Headers({
         'Authorization': `Bearer ${accessToken}`
       }), 
     })
+
+    setSelectedPlaylist(playlist)
 
     let data = await response.json()
 
@@ -106,15 +110,50 @@ export default function App() {
   return (
     <Wrapper>
 
-        {accessToken === null && <TouchableOpacity style={{paddingVertical:20, paddingHorizontal:40, backgroundColor:'#1db954'}} onPress={() => connectToSpotify()}><Text style={{color:'white'}}>Connect to Spotify</Text></TouchableOpacity>}
-        {isConnected && 
-          <TouchableOpacity onPress={() => setSelectingPlaylist(!selectingPlaylist)} style={{position:'absolute', top:50, left:20, width:30, height:30}}>
-            <Image source={{uri: 'https://www.materialui.co/materialIcons/av/playlist_add_white_192x192.png'}} style={{width: 20, height: 20}} />
+        {accessToken === null &&
+        <>
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.25)']}
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: 300,
+            }}
+          />
+          <Image source={{uri: 'https://i.imgur.com/ijm0MzL.png'}} style={{width: 84, height: 123, marginBottom:35}} />
+          <Text style={{fontWeight:'bold', fontSize:18, marginBottom:100}}>Discover new music, epic slogan.</Text>
+          <TouchableOpacity style={{height:69, width:width-30, backgroundColor:'#1db954'}} onPress={() => connectToSpotify()}>
+            <View style={{flex:1, flexDirection:"row", alignItems:"center", justifyContent:'center'}}>
+              <Image source={{uri: 'https://i.imgur.com/H73GsK5.png'}} style={{width: 30, height: 30, marginRight:25}} />
+              <Text style={{color:'white'}}>LOGIN WITH SPOTIFY</Text>
+            </View>
           </TouchableOpacity>
+          
+        </>
+        }
+        {isConnected &&
+        <View style={{flex:1, width:width, height:100, alignItems:"center", position:"absolute", top:0, paddingLeft:15, paddingRight:40, flexDirection:"row", justifyContent:"space-between"}}>
+            <TouchableOpacity onPress={() => setSelectingPlaylist(!selectingPlaylist)} style={{width:25, height:25}}>
+              <Image source={{uri: 'https://i.imgur.com/obUE3wx.png'}} style={{width: 50, height: 47}} />
+            </TouchableOpacity>
+
+            {selectedPlaylist !== null && 
+              <>
+                <Image source={{uri: selectedPlaylist.images[0].url}} style={{width: 40, height: 40}} />
+                <Text>{selectedPlaylist.name}</Text>
+              </>    
+            }
+
+            <TouchableOpacity onPress={() => setSelectingPlaylist(!selectingPlaylist)} style={{width:25, height:25}}>
+              <Image source={{uri: 'https://i.imgur.com/RXo3Gcv.png'}} style={{width: 50, height: 47}} />
+            </TouchableOpacity>
+        </View>
         }
         {selectingPlaylist &&
-          <>
-          <Text style={{color:'white', fontSize:16, position:'absolute', top:80, left:10}}>Select Source Playlist</Text>
+          <View style={{flex:1, alignItems:"center"}}>
+          <Text style={{color:'black', fontWeight:'bold', fontSize:16, position:'absolute', top:55}}>Select Source Playlist</Text>
 
           <ScrollWrapper style={{width:width}}>
 
@@ -122,26 +161,25 @@ export default function App() {
               
               {spotifyPlaylists !== null && spotifyPlaylists.map((playlist, index) => {
                 return (
-                  <Playlist key={index} onPress={() => {
-
+                  <Playlist style={{width:(width-40)/2}} key={index} onPress={() => {
                     setSelectingPlaylist(false)
-                    selectPlaylist(playlist.id)
-                    
-                    }}>
-                      <Image source={{uri: playlist.images[0].url}} style={{width: 80, height: 80, marginRight:10}} />
+                    selectPlaylist(playlist)
+                  }}>
                       <View style={{flex: 1}}>
-                        <Text style={{color:"white"}}>{playlist.name}</Text>
+                        <Text style={{color:"black", marginBottom:5}}>{playlist.name}</Text>
                       </View>
+                      <Image source={{uri: playlist.images[0].url}} style={{width: (width-40)/2, height: (width-40)/2}} />
+                      
                   </Playlist>
                 )
               })}
             </PlaylistContainer>
           </ScrollWrapper>
-          </>
+          </View>
       }
 
       {/* Recommendation FLOW */}
-      {Array.isArray(recommendations) && recommendations.length > 0 ?
+      {Array.isArray(recommendations) && recommendations.length > 0 && !selectPlaylist ?
               <ScrollWrapper style={{width:width}}>
 
               <ThumbnailContainer>
@@ -160,6 +198,7 @@ export default function App() {
                   setRecommendations(nextRecommendations)
                 }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:15}}>No</Text></TouchableOpacity>
                 <TouchableOpacity style={{marginHorizontal:10}} style={{backgroundColor:"#335855"}} title="Yes" onPress={() => {
+                  console.log(recommendations[0])
                   let nextRecommendations = recommendations.splice(1, recommendations.length)
                   setRecommendations(nextRecommendations)
                 }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:15}}>Yes</Text></TouchableOpacity>
@@ -174,7 +213,7 @@ export default function App() {
               </View>
       
             </ScrollWrapper>
-        : isConnected && !selectingPlaylist &&  <Text style={{color:'white', fontSize:16, marginVertical:10, marginHorizontal:10}} >Select a source playlist for your recommendations.</Text>
+        : isConnected && !selectingPlaylist &&  <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}} >select a source playlist</Text>
       }
 
       {newSong !== null &&
@@ -202,20 +241,21 @@ export default function App() {
 
 const Wrapper = styled.View`
   flex:1;
-  background-color: #111;
+  background-color: #F7F7F7;
   align-items:center;
   justify-content:center;
 `
 
 const ScrollWrapper = styled.ScrollView`
-  margin:110px 0 0 0;
+  margin:100px 0 0 0;
   flex:1;
 `
 
 const PlaylistContainer = styled.View`
   flex:1;
-  background-color:#111;
-  flex-direction:column;
+  flex-wrap:wrap;
+  flex-direction:row;
+  padding:0 5px;
 `
 
 const ThumbnailContainer = styled.View`
@@ -224,15 +264,7 @@ const ThumbnailContainer = styled.View`
 `
 
 const Playlist = styled.TouchableOpacity`
-  height:80;
-  padding:5px 10px 5px 0;
-  flex:1;
-  flex-direction:row;
-  flex-wrap:wrap;
-  align-items:center;
-  background-color:#222;
-  color:white;
-  margin:10px 0;
+  margin:10px 5px;
 `
 
 const Thumbnail = styled.TouchableOpacity`
