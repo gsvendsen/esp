@@ -4,6 +4,11 @@ import getTokens from './getTokens'
 import { encode as btoa } from 'base-64';
 
 export default refreshTokens = async (refreshToken) => {
+
+    let accessTokenData;
+    let refreshTokenData;
+    let expirationTimeData;
+
     try {
       const credentials = await getSpotifyCredentials()
       const credsB64 = btoa(`${credentials.clientId}:${credentials.clientSecret}`);
@@ -16,8 +21,12 @@ export default refreshTokens = async (refreshToken) => {
         body: `grant_type=refresh_token&refresh_token=${refreshToken}`,
       });
       const responseJson = await response.json();
+      console.log(responseJson)
       if (responseJson.error) {
-        await getTokens();
+        const tokenData = await getTokens();
+        accessTokenData = tokenData.accessTokenData
+        refreshTokenData = tokenData.refreshTokenData
+        expirationTimeData = tokenData.expirationTimeData
       } else {
         const {
           access_token: newAccessToken,

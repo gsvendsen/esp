@@ -2,8 +2,10 @@ import React, {useEffect, useState} from 'react';
 import { Text, View, Button, ScrollView, Image, TouchableOpacity, Linking } from 'react-native';
 import styled from 'styled-components'
 import { LinearGradient } from 'expo-linear-gradient';
+import { Audio } from 'expo-av';
 
 import getTokens from './src/functions/spotify/getTokens'
+import refreshTokens from './src/functions/spotify/refreshTokens'
 import getSpotifyUserId from './src/functions/spotify/getSpotifyUserId'
 import getSpotifyPlaylists from './src/functions/spotify/getSpotifyPlaylists'
 
@@ -11,6 +13,8 @@ import { Dimensions } from "react-native";
 
 var width = Dimensions.get('window').width; //full width
 var height = Dimensions.get('window').height; //full height
+
+import {AsyncStorage} from 'react-native';
 
 export default function App() {
 
@@ -21,13 +25,58 @@ export default function App() {
   const [spotifyPlaylists, setSpotifyPlaylists] = useState(null);
   const [recommendations, setRecommendations] = useState(null);
   const [newSong, setNewSong] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState(null);
 
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
+  const [selectedPlaylistTracks, setSelectedPlaylistTracks] = useState(null);
   const [targetPlaylist, setTargetPlaylist] = useState(null);
 
   const [selectingPlaylist, setSelectingPlaylist] = useState(false);
   const [selectingTargetPlaylist, setSelectingTargetPlaylist] = useState(false);
+
+
+  useEffect(() => {
+    _retrieveData()
+
+  }, [])
+
+  const _retrieveData = async () => {
+    let user = null
+    user = await AsyncStorage.getItem('USER');
+    user = await JSON.parse(user)
+
+    if(new Date().getTime() > user.expirationTime){
+      const {accessTokenData, refreshTokenData, expirationTimeData} = await refreshTokens(user.refreshToken)
+      user.accessToken = accessTokenData
+      user.refreshToken = refreshTokenData
+      user.expirationTime = expirationTimeData
+      
+      _storeData({accessToken:accessTokenData, refreshToken:refreshTokenData, expirationTime:expirationTimeData})
+
+    }
+    
+    if (user !== null) {
+      // We have data!!
+      console.log(user);
+      setAccessToken(user.accessToken)
+      setRefreshToken(user.refreshToken)
+      setExpirationTime(user.expirationTime)
+      setIsConnected(true)
+
+      let userId = await getSpotifyUserId(user.accessToken)
+      const playlists = await getSpotifyPlaylists(user.accessToken, userId)
+      setSpotifyPlaylists(playlists)
+    }
+  }
+
+
+  const _storeData = async (data) => {
+    try {
+      await AsyncStorage.setItem('USER', JSON.stringify(data));
+    } catch (error) {
+      // Error saving data
+    }
+  };
 
   const connectToSpotify = async () => {
     const {accessTokenData, refreshTokenData, expirationTimeData} = await getTokens();
@@ -39,6 +88,8 @@ export default function App() {
     const playlists = await getSpotifyPlaylists(accessTokenData, userId)
     setSpotifyPlaylists(playlists)
     setIsConnected(true)
+    _storeData({accessToken:accessTokenData, refreshToken:refreshTokenData, expirationTime:expirationTimeData})
+
   }
 
   const selectPlaylist = async (playlist) => {
@@ -49,7 +100,6 @@ export default function App() {
       }), 
     })
 
-    setSelectedPlaylist(playlist)
 
     let data = await response.json()
 
@@ -57,13 +107,16 @@ export default function App() {
 
     let tracksIds = tracks.map((track) => track.track.id)
 
-    getRecommendationsFromPlaylist(tracksIds)
+    setSelectedPlaylist(playlist)
+    setSelectedPlaylistTracks(tracksIds)
+
+    getRecommendationsFromPlaylist(tracksIds, true)
     // Array of all track IDs 
     return tracksIds 
 
   }
 
-  const getRecommendationsFromPlaylist = async (playlist) => {
+  const getRecommendationsFromPlaylist = async (playlist, reset) => {
     const shuffled = playlist.sort(() => 0.5 - Math.random());
 
     // Get sub-array of first n elements after shuffled
@@ -82,10 +135,31 @@ export default function App() {
 
     const recommendationData = data2.tracks
 
-    setRecommendations(recommendationData)
+    if(recommendations === null){
+      setRecommendations(recommendationData)
+    } else {
+      if(reset){
+        setRecommendations(recommendationData)
+      } else {
+        setRecommendations([...recommendations, ...recommendationData])
+      }
+    }
+
 
     return recommendationData
 
+  }
+
+  const soundObject = new Audio.Sound();
+
+  const playMusic = async (songUrl) => {
+    console.log("Playing: ", songUrl)
+    await soundObject.loadAsync({uri: songUrl});
+    await soundObject.playAsync();
+  }
+
+  const stopMusic = async (songUrl) => {
+    await soundObject.stopAsync();
   }
 
   const addSongToPlaylist = async (songId, playlistId) => {
@@ -94,7 +168,7 @@ export default function App() {
       uris:[`spotify:track:${songId}`]
     }
 
-    let response2 = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, { 
+    await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, { 
       method: 'POST', 
       headers: new Headers({
         'Authorization': `Bearer ${accessToken}`
@@ -102,18 +176,12 @@ export default function App() {
       body: JSON.stringify(body)
     })
 
-    let data = await response2.json()
-
-    setNewSong(null)
-
-    console.log("Post playlist data: ", data)
-
   }
   // https://cdn.iconscout.com/icon/premium/png-256-thumb/music-playlist-5-599896.png
   return (
     <Wrapper>
 
-        {accessToken === null &&
+        {isConnected === false &&
         <>
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.25)']}
@@ -215,11 +283,12 @@ export default function App() {
         }
 
       {/* Recommendation FLOW */}
-      {Array.isArray(recommendations) && recommendations.length > 0 && !selectingTargetPlaylist ? !targetPlaylist ? <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}}>select a target playlist</Text> :
+      {Array.isArray(recommendations) && recommendations.length > 0 && !selectingTargetPlaylist && !selectingPlaylist ? !targetPlaylist ? <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}}>select a target playlist</Text> :
               <ScrollWrapper style={{width:width}}>
 
+              {/* Recommendation Thumbnail */}
               <ThumbnailContainer>
-                <Thumbnail size={width-100} onPress={() => setNewSong(recommendations[9].id)}>
+                <Thumbnail size={width-100}>
                     <Image source={{uri: recommendations[0].album.images[0].url}} style={{width: width-150, height: width-150, marginRight:10}} />
                     <View style={{flex: 1, marginTop:5}}>
                       <Text style={{color:"black"}}>{recommendations[0].name}</Text>
@@ -229,17 +298,41 @@ export default function App() {
               </ThumbnailContainer>
       
               <View style={{flex:1, flexDirection:'row', justifyContent:'space-evenly', marginVertical:10}}>
+
+                {/* Decline recommendation */}
                 <TouchableOpacity style={{marginHorizontal:10}} style={{backgroundColor:"#CD5555"}} title="No" onPress={() => {
-                  let nextRecommendations = recommendations.splice(1, recommendations.length)
-                  setRecommendations(nextRecommendations)
-                }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:15}}>No</Text></TouchableOpacity>
-                <TouchableOpacity style={{marginHorizontal:10}} style={{backgroundColor:"#335855"}} title="Yes" onPress={() => {
                   console.log(recommendations[0])
+                  stopMusic()
+                  if(recommendations.length <= 5){
+                    getRecommendationsFromPlaylist(selectedPlaylistTracks)
+                  }
                   let nextRecommendations = recommendations.splice(1, recommendations.length)
                   setRecommendations(nextRecommendations)
+
+                  
+                }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:15}}>No</Text></TouchableOpacity>
+
+                {/* Accept recommendation */}
+                <TouchableOpacity style={{marginHorizontal:10}} style={{backgroundColor:"#335855"}} title="Yes" onPress={() => {
+                  stopMusic()
+                  if(recommendations.length <= 5){
+                    getRecommendationsFromPlaylist(selectedPlaylistTracks)
+                  }
+                  addSongToPlaylist(recommendations[0].id, targetPlaylist.id)
+                  let nextRecommendations = recommendations.splice(1, recommendations.length)
+                  setRecommendations(nextRecommendations)
+                  
                 }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:15}}>Yes</Text></TouchableOpacity>
+
+                {/* Play music */}
+                <TouchableOpacity style={{marginHorizontal:10}} style={{backgroundColor:"blue"}} onPress={() => {
+                  console.log(recommendations[0].preview_url)
+                  playMusic(recommendations[0].preview_url)
+                }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:15}}>Play</Text></TouchableOpacity>
+
               </View>
       
+              {/* Listen on Spotify button */}
               <View style={{flex:1, flexDirection:'row', justifyContent:'center', alignItems:'center', marginTop:20}}>
                 <Image source={{uri: 'http://pluspng.com/img-png/spotify-logo-png-open-2000.png'}} style={{width: 30, height: 30, marginHorizontal:10}} />
                 <Text style={{color: 'black', marginHorizontal:15}}
@@ -252,25 +345,6 @@ export default function App() {
         : isConnected && !selectingPlaylist && !selectingTargetPlaylist &&  <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}} >select a source playlist</Text>
       }
 
-      {newSong !== null &&
-        <ScrollWrapper style={{width:width}}>
-        <PlaylistContainer>
-        <Text style={{color:'white', fontSize:16, marginVertical:10, marginHorizontal:10}}>Add selected song to a playlist</Text>
-
-          {spotifyPlaylists !== null && spotifyPlaylists.map((playlist, index) => {
-            return (
-              <Playlist key={index} onPress={() => addSongToPlaylist(newSong, playlist.id)}>
-                  <Image source={{uri: playlist.images[0].url}} style={{width: 80, height: 80, marginRight:10}} />
-                  <View style={{flex: 1, alignItems:'space-between'}}>
-                    <Text style={{color:"white"}}>{playlist.name}</Text>
-                    <Image source={{uri: 'https://icon-library.net/images/white-plus-icon/white-plus-icon-3.jpg'}} style={{width: 15, height: 15, marginLeft:10}} />
-                  </View>
-              </Playlist>
-            )
-          })}
-        </PlaylistContainer>
-      </ScrollWrapper>
-      }
     </Wrapper>
   );
 }
