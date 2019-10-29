@@ -57,7 +57,6 @@ export default function App() {
     
     if (user !== null) {
       // We have data!!
-      console.log(user);
       setAccessToken(user.accessToken)
       setRefreshToken(user.refreshToken)
       setExpirationTime(user.expirationTime)
@@ -159,7 +158,12 @@ export default function App() {
   }
 
   const stopMusic = async (songUrl) => {
-    await soundObject.stopAsync();
+    try {
+      await soundObject.unloadAsync();
+      await soundObject.stopAsync();
+    } catch (error) {
+      
+    }
   }
 
   const addSongToPlaylist = async (songId, playlistId) => {
@@ -325,9 +329,13 @@ export default function App() {
                 }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:15}}>Yes</Text></TouchableOpacity>
 
                 {/* Play music */}
-                <TouchableOpacity style={{marginHorizontal:10}} style={{backgroundColor:"blue"}} onPress={() => {
-                  console.log(recommendations[0].preview_url)
-                  playMusic(recommendations[0].preview_url)
+                <TouchableOpacity style={{marginHorizontal:10}} style={{backgroundColor:"blue"}} onPress={async () => {
+                  console.log("Mp3 URL!: ", recommendations[0].preview_url)
+                  const status = await soundObject.getStatusAsync()
+                  console.log("Preplaying Status: ", status)
+                  if(status.isLoaded === false){
+                    playMusic(recommendations[0].preview_url)
+                  }
                 }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:15}}>Play</Text></TouchableOpacity>
 
               </View>

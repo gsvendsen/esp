@@ -7,6 +7,5 @@ export default getSpotifyPlaylists = async (accessToken, userId) => {
     })
 
     let data = await response.json()
-    console.log(data)
     return data.items
   }
