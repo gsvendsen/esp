@@ -11,10 +11,14 @@ import getSpotifyPlaylists from './src/functions/spotify/getSpotifyPlaylists'
 
 import { Dimensions } from "react-native";
 
+import { firestore } from './firebase'
+
 var width = Dimensions.get('window').width; //full width
 var height = Dimensions.get('window').height; //full height
 
 import {AsyncStorage} from 'react-native';
+
+let soundObject = new Audio.Sound();
 
 export default function App() {
 
@@ -26,6 +30,7 @@ export default function App() {
   const [recommendations, setRecommendations] = useState(null);
   const [newSong, setNewSong] = useState(null);
   const [isConnected, setIsConnected] = useState(null);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [selectedPlaylistTracks, setSelectedPlaylistTracks] = useState(null);
@@ -34,11 +39,26 @@ export default function App() {
   const [selectingPlaylist, setSelectingPlaylist] = useState(false);
   const [selectingTargetPlaylist, setSelectingTargetPlaylist] = useState(false);
 
-
+  console.disableYellowBox = true;
   useEffect(() => {
+
+    firebaseStuff()
     _retrieveData()
 
+    connectToSpotify()
   }, [])
+
+
+  const firebaseStuff = async () => {
+    const snapshot = await firestore.collection('posts').get()
+
+    const posts = snapshot.docs.map(doc => { return { id: doc.id, ...doc.data()}})
+  
+    console.log(posts)
+  
+  }
+
+
 
   const _retrieveData = async () => {
     let user = null
@@ -89,6 +109,17 @@ export default function App() {
     setIsConnected(true)
     _storeData({accessToken:accessTokenData, refreshToken:refreshTokenData, expirationTime:expirationTimeData})
 
+    const query = await firestore.collection('users').where('userID', '==', userId).get()
+    const userExistsInDB = false
+
+    query.forEach(doc => {
+      userExistsInDB = true
+    })
+
+    if(!userExistsInDB){
+      console.log("not exists!!")
+      const docRef = await firestore.collection('users').add({spotifyID: userId})
+    }
   }
 
   const selectPlaylist = async (playlist) => {
@@ -149,12 +180,12 @@ export default function App() {
 
   }
 
-  const soundObject = new Audio.Sound();
 
   const playMusic = async (songUrl) => {
     console.log("Playing: ", songUrl)
     await soundObject.loadAsync({uri: songUrl});
     await soundObject.playAsync();
+    console.log(await soundObject.getStatusAsync())
   }
 
   const stopMusic = async (songUrl) => {
@@ -301,12 +332,27 @@ export default function App() {
                 </Thumbnail>
               </ThumbnailContainer>
       
+              <View style={{flex:1, flexDirection:'row', justifyContent:'center'}}>
+                {/* Toggle music */}
+                <TouchableOpacity style={{marginHorizontal:10}} style={{width:50, height:50, borderRadius:50, borderRadius:1, borderColor:"black", flex:1, justifyContent:"center", alignItems:"center"}} onPress={async () => {
+                  setIsAudioPlaying(!isAudioPlaying)
+                  const status = await soundObject.getStatusAsync()
+                  if(status.isLoaded === false){
+                    playMusic(recommendations[0].preview_url)
+                  } else {
+                    stopMusic()
+                  }
+                }}>
+                  <Image source={{uri: isAudioPlaying ? "https://i.imgur.com/MlNDifj.png" : "https://i.imgur.com/9I5gch8.png"}} style={{width:30, height:30}} />
+                </TouchableOpacity>
+              </View>
+
               <View style={{flex:1, flexDirection:'row', justifyContent:'space-evenly', marginVertical:10}}>
 
                 {/* Decline recommendation */}
                 <TouchableOpacity style={{marginHorizontal:10}} style={{backgroundColor:"#CD5555"}} title="No" onPress={() => {
-                  console.log(recommendations[0])
                   stopMusic()
+                  setIsAudioPlaying(false)
                   if(recommendations.length <= 5){
                     getRecommendationsFromPlaylist(selectedPlaylistTracks)
                   }
@@ -319,6 +365,7 @@ export default function App() {
                 {/* Accept recommendation */}
                 <TouchableOpacity style={{marginHorizontal:10}} style={{backgroundColor:"#335855"}} title="Yes" onPress={() => {
                   stopMusic()
+                  setIsAudioPlaying(false)
                   if(recommendations.length <= 5){
                     getRecommendationsFromPlaylist(selectedPlaylistTracks)
                   }
@@ -327,16 +374,6 @@ export default function App() {
                   setRecommendations(nextRecommendations)
                   
                 }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:15}}>Yes</Text></TouchableOpacity>
-
-                {/* Play music */}
-                <TouchableOpacity style={{marginHorizontal:10}} style={{backgroundColor:"blue"}} onPress={async () => {
-                  console.log("Mp3 URL!: ", recommendations[0].preview_url)
-                  const status = await soundObject.getStatusAsync()
-                  console.log("Preplaying Status: ", status)
-                  if(status.isLoaded === false){
-                    playMusic(recommendations[0].preview_url)
-                  }
-                }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:15}}>Play</Text></TouchableOpacity>
 
               </View>
       
