@@ -32,6 +32,7 @@ export default function App() {
   const [isConnected, setIsConnected] = useState(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
+  const [seedTracks, setSeedTracks] = useState(null);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [selectedPlaylistTracks, setSelectedPlaylistTracks] = useState(null);
   const [targetPlaylist, setTargetPlaylist] = useState(null);
@@ -39,13 +40,14 @@ export default function App() {
   const [selectingPlaylist, setSelectingPlaylist] = useState(false);
   const [selectingTargetPlaylist, setSelectingTargetPlaylist] = useState(false);
 
+  const [viewingBookmarks, setViewingBookmarks] = useState(null);
+
   console.disableYellowBox = true;
   useEffect(() => {
 
     firebaseStuff()
     _retrieveData()
 
-    connectToSpotify()
   }, [])
 
 
@@ -109,7 +111,7 @@ export default function App() {
     setIsConnected(true)
     _storeData({accessToken:accessTokenData, refreshToken:refreshTokenData, expirationTime:expirationTimeData})
 
-    const query = await firestore.collection('users').where('userID', '==', userId).get()
+    const query = await firestore.collection('users').where('spotifyID', '==', userId).get()
     const userExistsInDB = false
 
     query.forEach(doc => {
@@ -151,6 +153,8 @@ export default function App() {
 
     // Get sub-array of first n elements after shuffled
     let selected = shuffled.slice(0, 5);
+
+    setSeedTracks(selected)
 
     const queryIds = selected.join(',')
 
@@ -210,7 +214,11 @@ export default function App() {
       }),
       body: JSON.stringify(body)
     })
+  }
 
+  const saveRecommendationFlow = async (seedTracks) => {
+    let userId = await getSpotifyUserId(accessToken)
+    const docRef = await firestore.collection('recommendationFlows').add({seedTracks: seedTracks, userID: userId})
   }
   // https://cdn.iconscout.com/icon/premium/png-256-thumb/music-playlist-5-599896.png
   return (
@@ -243,18 +251,18 @@ export default function App() {
         {/* NAVBAR */}
         {isConnected &&
         <View style={{flex:1, width:width, height:150, alignItems:"center", position:"absolute", top:0, paddingLeft:20, paddingRight:15, flexDirection:"row", justifyContent:"space-between"}}>
-            {!selectingTargetPlaylist ? < TouchableOpacity onPress={() => setSelectingPlaylist(!selectingPlaylist)} style={{width:50, height:50}}>
+            {!selectingTargetPlaylist && !viewingBookmarks ? < TouchableOpacity onPress={() => setSelectingPlaylist(!selectingPlaylist)} style={{width:50, height:50}}>
               <Image source={{uri: 'https://i.imgur.com/obUE3wx.png'}} style={{width: 40, height: 40}} />
             </TouchableOpacity> : <View />}
 
-            {selectedPlaylist !== null && !selectingPlaylist && !selectingTargetPlaylist &&
+            {selectedPlaylist !== null && !selectingPlaylist && !viewingBookmarks && !selectingTargetPlaylist &&
               <>
                 <Image source={{uri: selectedPlaylist.images[0].url}} style={{width: 40, height: 40}} />
                 <Text>{selectedPlaylist.name}</Text>
               </>    
             }
 
-            {!selectingPlaylist &&
+            {!selectingPlaylist && !viewingBookmarks &&
             <TouchableOpacity onPress={() => setSelectingTargetPlaylist(!selectingTargetPlaylist)} style={{width:50, height:50}}>
               <Image source={{uri: 'https://i.imgur.com/RXo3Gcv.png'}} style={{width: 40, height: 40}} />
             </TouchableOpacity>}
@@ -317,8 +325,36 @@ export default function App() {
         </View>
         }
 
+        {/* PAGE || SELECT A BOOKMARK */}
+      {viewingBookmarks &&
+        <View style={{flex:1, alignItems:"center"}}>
+          <Text style={{color:'black', fontWeight:'bold', fontSize:16, position:'absolute', top:55}}>Select Previous Flow</Text>
+
+          <ScrollWrapper style={{width:width}}>
+
+            <PlaylistContainer>
+              
+              {viewingBookmarks.map((bookmark, index) => {
+                return (
+                  <Playlist style={{width:(width-40)/2}} key={index} onPress={() => {
+                    setSelectedPlaylist(null)
+                    setSelectedPlaylistTracks(bookmark.seedTracks)
+                    getRecommendationsFromPlaylist(bookmark.seedTracks, true)
+                    setViewingBookmarks(null)
+                  }}>
+                      <View style={{flex: 1}}>
+                        <Text style={{color:"black", marginBottom:5}}>Bookmark: {index+1}</Text>
+                      </View>
+                  </Playlist>
+                )
+              })}
+            </PlaylistContainer>
+          </ScrollWrapper>
+        </View>
+        }
+
       {/* Recommendation FLOW */}
-      {Array.isArray(recommendations) && recommendations.length > 0 && !selectingTargetPlaylist && !selectingPlaylist ? !targetPlaylist ? <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}}>select a target playlist</Text> :
+      {Array.isArray(recommendations) && recommendations.length > 0 && !selectingTargetPlaylist && !viewingBookmarks && !selectingPlaylist ? !targetPlaylist ? <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}}>select a target playlist</Text> :
               <ScrollWrapper style={{width:width}}>
 
               {/* Recommendation Thumbnail */}
@@ -360,7 +396,7 @@ export default function App() {
                   setRecommendations(nextRecommendations)
 
                   
-                }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:15}}>No</Text></TouchableOpacity>
+                }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:5}}>No</Text></TouchableOpacity>
 
                 {/* Accept recommendation */}
                 <TouchableOpacity style={{marginHorizontal:10}} style={{backgroundColor:"#335855"}} title="Yes" onPress={() => {
@@ -373,22 +409,46 @@ export default function App() {
                   let nextRecommendations = recommendations.splice(1, recommendations.length)
                   setRecommendations(nextRecommendations)
                   
-                }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:15}}>Yes</Text></TouchableOpacity>
+                }}><Text style={{color:"white", paddingHorizontal:45, paddingVertical:5}}>Yes</Text></TouchableOpacity>
 
               </View>
       
-              {/* Listen on Spotify button */}
+              {/* Listen on Spotify button // Save flow */}
               <View style={{flex:1, flexDirection:'row', justifyContent:'center', alignItems:'center', marginTop:20}}>
                 <Image source={{uri: 'http://pluspng.com/img-png/spotify-logo-png-open-2000.png'}} style={{width: 30, height: 30, marginHorizontal:10}} />
                 <Text style={{color: 'black', marginHorizontal:15}}
                       onPress={() => Linking.openURL(recommendations[0].external_urls.spotify)}>
                   Listen on Spotify
                 </Text>
-              </View>
-      
+                <TouchableOpacity style={{marginHorizontal:15}}
+                  onPress={() => saveRecommendationFlow(seedTracks)}>
+                  <Image source={{uri: 'https://i.imgur.com/FAZnaRu.png'}} style={{width: 30, height: 30, marginHorizontal:10}} />
+                </TouchableOpacity>
+              </View>      
             </ScrollWrapper>
-        : isConnected && !selectingPlaylist && !selectingTargetPlaylist &&  <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}} >select a source playlist</Text>
+        : isConnected && !selectingPlaylist && !selectingTargetPlaylist && !viewingBookmarks &&  <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}} >select a source playlist</Text>
       }
+      {/* View all my flows */}
+      {!selectingPlaylist && !selectingTargetPlaylist &&
+      <View style={{flex:1, position:"absolute", bottom:10, flexDirection:'row', justifyContent:'center', alignItems:'center', marginTop:20}}>
+        {!viewingBookmarks ?
+        <Text style={{color: 'black', marginHorizontal:15}} onPress={async () => {
+          let userId = await getSpotifyUserId(accessToken)
+          const query = await firestore.collection('recommendationFlows').where('userID', '==', userId).get()
+          const bookmarks = query.docs.map(doc => {
+            return doc.data()
+          })
+          setViewingBookmarks(bookmarks)
+          }}>
+          View bookmarked flows
+        </Text> :
+        <Text style={{color: 'black', marginHorizontal:15}} onPress={() => {
+          setViewingBookmarks(null)
+          }}>
+          Go back
+        </Text>
+      }
+      </View>}
 
     </Wrapper>
   );
