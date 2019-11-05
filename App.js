@@ -10,7 +10,7 @@ import getSpotifyUserId from './src/functions/spotify/getSpotifyUserId'
 import getSpotifyPlaylists from './src/functions/spotify/getSpotifyPlaylists'
 
 import { Dimensions } from "react-native";
-
+import Prompt from 'react-native-input-prompt';
 import { firestore } from './firebase'
 
 var width = Dimensions.get('window').width; //full width
@@ -41,12 +41,15 @@ export default function App() {
   const [selectingTargetPlaylist, setSelectingTargetPlaylist] = useState(false);
 
   const [viewingBookmarks, setViewingBookmarks] = useState(null);
+  const [isPromptVisible, setIsPromptVisible] = useState(false);
 
   console.disableYellowBox = true;
   useEffect(() => {
 
     firebaseStuff()
     _retrieveData()
+
+
 
   }, [])
 
@@ -167,7 +170,11 @@ export default function App() {
 
     let data2 = await response2.json()
 
-    const recommendationData = data2.tracks
+    let recommendationData = data2.tracks
+
+    recommendationData = recommendationData.filter((track) => {
+      return track.preview_url !== null
+    })
 
     if(recommendations === null){
       setRecommendations(recommendationData)
@@ -216,9 +223,9 @@ export default function App() {
     })
   }
 
-  const saveRecommendationFlow = async (seedTracks) => {
+  const saveRecommendationFlow = async (seedTracks, bookmarkName) => {
     let userId = await getSpotifyUserId(accessToken)
-    const docRef = await firestore.collection('recommendationFlows').add({seedTracks: seedTracks, userID: userId})
+    const docRef = await firestore.collection('recommendationFlows').add({seedTracks: seedTracks, userID: userId, name:bookmarkName})
   }
   // https://cdn.iconscout.com/icon/premium/png-256-thumb/music-playlist-5-599896.png
   return (
@@ -332,23 +339,23 @@ export default function App() {
 
           <ScrollWrapper style={{width:width}}>
 
-            <PlaylistContainer>
+            <BookmarkContainer>
               
               {viewingBookmarks.map((bookmark, index) => {
                 return (
-                  <Playlist style={{width:(width-40)/2}} key={index} onPress={() => {
+                  <Bookmark key={index} onPress={() => {
                     setSelectedPlaylist(null)
                     setSelectedPlaylistTracks(bookmark.seedTracks)
                     getRecommendationsFromPlaylist(bookmark.seedTracks, true)
                     setViewingBookmarks(null)
                   }}>
                       <View style={{flex: 1}}>
-                        <Text style={{color:"black", marginBottom:5}}>Bookmark: {index+1}</Text>
+                        <Text style={{color:"black", marginBottom:5}}>{bookmark.name}</Text>
                       </View>
-                  </Playlist>
+                  </Bookmark>
                 )
               })}
-            </PlaylistContainer>
+            </BookmarkContainer>
           </ScrollWrapper>
         </View>
         }
@@ -374,6 +381,9 @@ export default function App() {
                   setIsAudioPlaying(!isAudioPlaying)
                   const status = await soundObject.getStatusAsync()
                   if(status.isLoaded === false){
+                    if(recommendations[0].preview_url === null){
+                      console.log(recommendations[0])
+                    }
                     playMusic(recommendations[0].preview_url)
                   } else {
                     stopMusic()
@@ -421,7 +431,11 @@ export default function App() {
                   Listen on Spotify
                 </Text>
                 <TouchableOpacity style={{marginHorizontal:15}}
-                  onPress={() => saveRecommendationFlow(seedTracks)}>
+                  
+                  onPress={() => {
+                    setIsPromptVisible(true)
+                    }
+                  }>
                   <Image source={{uri: 'https://i.imgur.com/FAZnaRu.png'}} style={{width: 30, height: 30, marginHorizontal:10}} />
                 </TouchableOpacity>
               </View>      
@@ -450,6 +464,26 @@ export default function App() {
       }
       </View>}
 
+      <Prompt
+        visible={isPromptVisible}
+        title="New Flow Bookmark"
+        placeholder="Enter name"
+        onCancel={() =>
+          setIsPromptVisible(false)
+        }
+        onSubmit={text =>
+            {
+              if (text === ""){
+                saveRecommendationFlow(seedTracks, `Untitled - ${(new Date()).toISOString().slice(0,10).replace(/-/g,"-")}`)
+              }
+  
+              saveRecommendationFlow(seedTracks, text)
+              setIsPromptVisible(false)
+            }
+
+        }
+      />
+
     </Wrapper>
   );
 }
@@ -473,6 +507,12 @@ const PlaylistContainer = styled.View`
   padding:0 5px;
 `
 
+const BookmarkContainer = styled.View`
+  flex:1;
+  flex-direction:column;
+  padding:0 15px;
+`
+
 const ThumbnailContainer = styled.View`
   flex:1;
   flex-direction:column;
@@ -481,6 +521,14 @@ const ThumbnailContainer = styled.View`
 
 const Playlist = styled.TouchableOpacity`
   margin:10px 5px;
+`
+
+const Bookmark = styled.TouchableOpacity`
+  margin:10px 0;
+  flex:1;
+  padding:25px 0 25px 10px;
+  border-bottom-color: lightgrey;
+  border-bottom-width: 1;
 `
 
 const Thumbnail = styled.TouchableOpacity`
