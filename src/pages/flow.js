@@ -45,7 +45,7 @@ export default Flow = (props) => {
             <TouchableOpacity style={{marginHorizontal:10}} onPress={() => {
                 props.onDeclineRecommendation()
             }}>
-                <Image source={{uri: "https://i.imgur.com/a7KJOYM.png"}} style={{width:30, height:30}} />
+                <Image source={{uri: "https://i.imgur.com/a7KJOYM.png"}} style={{width:26, height:26}} />
             </TouchableOpacity>
             {/* Toggle music */}
             <TouchableOpacity style={{marginHorizontal:10}} style={{width:50, height:50, borderRadius:50, borderRadius:1, borderColor:"black", flex:1, justifyContent:"center", alignItems:"center"}} onPress={() => {
@@ -70,13 +70,7 @@ export default Flow = (props) => {
             >
                 <Image source={{uri: 'http://pluspng.com/img-png/spotify-logo-png-open-2000.png'}} style={{width: 30, height: 30}} />
             </TouchableOpacity>
-            <TouchableOpacity style={{marginHorizontal:15}}
-                onPress={() => {
-                    props.onBookmarkPress()
-                }
-            }>
-                <Image source={{uri: 'https://i.imgur.com/FAZnaRu.png'}} style={{width: 30, height: 30, marginLeft:20}} />
-            </TouchableOpacity>
+            
             <TouchableOpacity style={{marginHorizontal:15}}
                 onPress={() => {
                     props.onClipboardPress()

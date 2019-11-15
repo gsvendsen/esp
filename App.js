@@ -37,6 +37,7 @@ import Navbar from './src/components/Navbar';
 import Prompt from 'react-native-input-prompt';
 import FlashMessage from "react-native-flash-message";
 import { showMessage, hideMessage } from "react-native-flash-message";
+import { LinearGradient } from 'expo-linear-gradient';
 
 let soundObject = new Audio.Sound();
 
@@ -323,7 +324,7 @@ export default function App() {
             const docRef = await saveRecommendationFlow(seedTracks, `Untitled - ${(new Date()).toISOString().slice(0,10).replace(/-/g,"-")}`, accessToken)
             Clipboard.setString(`https://exp.host/@gsvendsen/esp?share=${docRef.id}`);
             showMessage({
-              message: "Link copied to clipboard!",
+              message: "URL copied to clipboard!",
               type: "success"
             })
           }}
@@ -331,11 +332,24 @@ export default function App() {
         />
         : isConnected && !selectingPlaylist && !selectingTargetPlaylist && !viewingBookmarks &&  <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}} >select a source playlist</Text>
       }
+
+
+
       {/* View all Bookmarks BUTTON */}
+      {Array.isArray(recommendations) && recommendations.length > 0 && !selectingTargetPlaylist && !viewingBookmarks && !selectingPlaylist && targetPlaylist && <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.1)']}
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 50,
+        }}
+      />}
       {!selectingPlaylist && !selectingTargetPlaylist && isConnected &&
       <View style={{flex:1, position:"absolute", bottom:10, flexDirection:'row', justifyContent:'center', alignItems:'center', marginTop:20}}>
         {!viewingBookmarks &&
-        <Text style={{color: 'black', marginHorizontal:15}} onPress={async () => {
+        <Text style={{fontWeight:"bold", color: 'black', marginRight:15, marginLeft:25}} onPress={async () => {
           let userId = await getSpotifyUserId(accessToken)
           const query = await firestore.collection('recommendationFlows').where('userID', '==', userId).get()
           const bookmarks = query.docs.map(doc => {
@@ -343,15 +357,25 @@ export default function App() {
           })
           setViewingBookmarks(bookmarks)
           }}>
-          View bookmarked flows
-        </Text>
+          MY SAVED FLOWS
+        </Text>}
+        {Array.isArray(recommendations) && recommendations.length > 0 && !selectingTargetPlaylist && !viewingBookmarks && !selectingPlaylist && targetPlaylist &&
+          <TouchableOpacity style={{marginHorizontal:15}}
+            onPress={() => {
+              setIsPromptVisible(true)
+            }
+          }>
+          <Text style={{fontWeight:"bold" ,color: 'black', borderLeftWidth:1, borderLeftColor:"black", paddingLeft:25}}>SAVE CURRENT FLOW</Text>
+        </TouchableOpacity>
+
       }
       </View>}
 
       {/* New Bookmark // PROMPT */}
       <Prompt
         visible={isPromptVisible}
-        title="New Flow Bookmark"
+        title="Save current Flow"
+        titleStyle={{fontSize:22}}
         placeholder="Enter name"
         onCancel={() =>
           setIsPromptVisible(false)
@@ -368,9 +392,8 @@ export default function App() {
 
         }
       />
-
       <FlashMessage position="bottom" />
-
+      
     </Wrapper>
   );
 }
