@@ -9,12 +9,7 @@ export default Navbar = (props) => {
               <Image source={{uri: 'https://i.imgur.com/obUE3wx.png'}} style={{width: 40, height: 40}} />
             </TouchableOpacity> : <View />}
 
-            {props.selectedSource &&
-              <>
-                <Image source={{uri: props.selectedSource.url}} style={{width: 40, height: 40}} />
-                <Text>{props.selectedSource.name}</Text>
-              </>    
-            }
+            {!props.selectingTarget && !props.selectingSource && <Image source={{uri: 'https://i.imgur.com/ijm0MzL.png'}} style={{width: 30, height: 40}} />}
 
             {!props.selectingSource &&
             <TouchableOpacity onPress={() => props.onSelectTarget()} style={{width:50, height:50}}>
