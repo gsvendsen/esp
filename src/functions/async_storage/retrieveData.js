@@ -8,13 +8,26 @@ export default _retrieveData = async () => {
     user = await AsyncStorage.getItem('USER');
     user = await JSON.parse(user)
 
-    if(new Date().getTime() > user.expirationTime){
-      const {accessTokenData, refreshTokenData, expirationTimeData} = await refreshTokens(user.refreshToken)
-      user.accessToken = accessTokenData
-      user.refreshToken = refreshTokenData
-      user.expirationTime = expirationTimeData
-      _storeData({accessToken:accessTokenData, refreshToken:refreshTokenData, expirationTime:expirationTimeData})
+    if(user === null){
+      return null
+    }
 
+    if(new Date().getTime() > user.expirationTime){
+      
+      let refreshData = await refreshTokens(user.refreshToken)
+
+      if(refreshData){
+        return null
+      } else {
+        const {accessTokenData, refreshTokenData, expirationTimeData} = refreshData
+        user.accessToken = accessTokenData
+        user.refreshToken = refreshTokenData
+        user.expirationTime = expirationTimeData
+        _storeData({accessToken:accessTokenData, refreshToken:refreshTokenData, expirationTime:expirationTimeData})
+  
+      }
+
+      
     }
     
     if (user !== null) {

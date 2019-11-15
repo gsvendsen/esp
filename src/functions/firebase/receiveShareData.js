@@ -1,7 +1,10 @@
-export const receiveShareData = async () => {
+import {Linking} from 'react-native'
+import { firestore } from '../../../firebase'
+
+
+export default receiveShareData = async () => {
     // If redirected from a sharable URL
     let url = await Linking.getInitialURL()
-    window.alert(url)
     let regex = /[?&]([^=#]+)=([^&#]*)/g,
     params = {},
     match;
@@ -14,6 +17,7 @@ export const receiveShareData = async () => {
       const flowData = docRef.data()
       return flowData.seedTracks      
     }
+
 
     return null
   

@@ -21,12 +21,10 @@ export default refreshTokens = async (refreshToken) => {
         body: `grant_type=refresh_token&refresh_token=${refreshToken}`,
       });
       const responseJson = await response.json();
-      console.log(responseJson)
+      
       if (responseJson.error) {
-        const tokenData = await getTokens();
-        accessTokenData = tokenData.accessTokenData
-        refreshTokenData = tokenData.refreshTokenData
-        expirationTimeData = tokenData.expirationTimeData
+        console.log(responseJson)
+        return null
       } else {
         const {
           access_token: newAccessToken,
