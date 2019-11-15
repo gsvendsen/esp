@@ -1,10 +1,13 @@
 import React, {useEffect, useState} from 'react';
-import { Text, View, Image, TouchableOpacity, Linking, Dimensions } from 'react-native';
+import { Text, View, Image, TouchableOpacity, Linking, Dimensions, Clipboard } from 'react-native';
 import styled from 'styled-components'
-import { LinearGradient } from 'expo-linear-gradient';
 
 // Pages
 import Login from './src/pages/login'
+import SelectSourcePlaylist from './src/pages/selectSourcePlaylist';
+import SelectTargetPlaylist from './src/pages/selectTargetPlaylist';
+import SelectBookmark from './src/pages/selectBookmark';
+import Flow from './src/pages/flow';
 
 // Spotify
 import getTokens from './src/functions/spotify/getTokens'
@@ -16,6 +19,8 @@ import addSongToPlaylist from './src/functions/spotify/addSongToPlaylist'
 // Firebase
 import { firestore } from './firebase'
 import receiveShareData from './src/functions/firebase/receiveShareData'
+import saveRecommendationFlow from './src/functions/firebase/saveRecommendationFlow'
+import deleteRecommendationFlow from './src/functions/firebase/deleteRecommendationFlow';
 
 // Async Storage
 import _retrieveData from './src/functions/async_storage/retrieveData'
@@ -25,14 +30,13 @@ import { Audio } from 'expo-av';
 import playMusic from './src/functions/audio/playMusic'
 import stopMusic from './src/functions/audio/stopMusic'
 
-import Prompt from 'react-native-input-prompt';
+// Navbar
 import Navbar from './src/components/Navbar';
-import SelectSourcePlaylist from './src/pages/selectSourcePlaylist';
-import SelectTargetPlaylist from './src/pages/selectTargetPlaylist';
-import SelectBookmark from './src/pages/selectBookmark';
-import Flow from './src/pages/flow';
 
-var width = Dimensions.get('window').width; //full width
+// Packages
+import Prompt from 'react-native-input-prompt';
+import FlashMessage from "react-native-flash-message";
+import { showMessage, hideMessage } from "react-native-flash-message";
 
 let soundObject = new Audio.Sound();
 
@@ -41,6 +45,7 @@ export default function App() {
   // Spotify Access Token
   const [accessToken, setAccessToken] = useState(null);
   const [spotifyPlaylists, setSpotifyPlaylists] = useState(null);
+  const [spotifyUserId, setSpotifyUserId] = useState(null);
   const [recommendations, setRecommendations] = useState(null);
   const [isConnected, setIsConnected] = useState(null);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
@@ -60,31 +65,36 @@ export default function App() {
   console.disableYellowBox = true;
 
   useEffect(() => {
-
     init()
-
   }, [])
 
+  // Runs every time the app starts
   const init = async () => {
+
+    // Tokens from AsyncStorage
     const user = await _retrieveData()
-    let userId = await getSpotifyUserId(user.accessToken)
-    const playlists = await getSpotifyPlaylists(user.accessToken, userId)
-
-    setSpotifyPlaylists(playlists)
-    setAccessToken(user.accessToken)
-    setIsConnected(true)
-
-    const sharedData = receiveShareData()
-
-    // If URL contains shared bookmark ID
-    if(sharedData !== null){
-      setIsAudioPlaying(false)
-      stopMusic(soundObject)
-      setSelectedPlaylist([])
-      setSelectedPlaylistTracks(sharedData)
-      const recommendations = getRecommendationsFromPlaylist(null, true, sharedData, accessToken)
-      setRecommendations(recommendations)
-      setViewingBookmarks(null)
+    if(user !== null){
+      let userId = await getSpotifyUserId(user.accessToken)
+      const playlists = await getSpotifyPlaylists(user.accessToken, userId)
+      setSpotifyPlaylists(playlists)
+      setAccessToken(user.accessToken)
+      setIsConnected(true)
+      setSpotifyUserId(userId)
+  
+      const sharedData = await receiveShareData()
+      
+      // If URL contains shared bookmark ID
+      if(sharedData !== null){
+        setIsAudioPlaying(false)
+        stopMusic(soundObject)
+        setSelectedPlaylist([])
+        setSelectedPlaylistTracks(sharedData)
+        const recommendations = await getRecommendationsFromPlaylist(null, true, sharedData, user.accessToken)
+        setRecommendations(recommendations)
+        setViewingBookmarks(null)
+      }
+    } else {
+      setIsConnected(false)
     }
   }
 
@@ -94,6 +104,7 @@ export default function App() {
     let userId = await getSpotifyUserId(accessTokenData)
     const playlists = await getSpotifyPlaylists(accessTokenData, userId)
     setSpotifyPlaylists(playlists)
+    setSpotifyUserId(userId)
     setIsConnected(true)
     _storeData({accessToken:accessTokenData, refreshToken:refreshTokenData, expirationTime:expirationTimeData})
 
@@ -129,6 +140,7 @@ export default function App() {
       setSeedTracks(finalSeeds)
       queryIds = finalSeeds.join(',')
     } else {
+      setSeedTracks(seedTracks)
       queryIds = seedTracks.join(',')
     }
 
@@ -154,7 +166,6 @@ export default function App() {
         finalRecommendations = [...recommendations, ...recommendationData]
       }
     }
-
     return finalRecommendations
   }
 
@@ -223,7 +234,9 @@ export default function App() {
       {/* PAGE || SELECT A TARGET PLAYLIST */}
       {selectingTargetPlaylist && Array.isArray(spotifyPlaylists) &&
         <SelectTargetPlaylist
-          allPlaylists={spotifyPlaylists}
+          allPlaylists={spotifyPlaylists.filter(playlist => {
+            return playlist.collaborative || playlist.owner.id === spotifyUserId
+          })}
           onPlaylistSelect={(playlist) => {
             setSelectingTargetPlaylist(false)
             setTargetPlaylist(playlist)
@@ -244,70 +257,93 @@ export default function App() {
             setRecommendations(recommendations)
             setViewingBookmarks(null)
           }}
+          deleteBookmark={(async (bookmark) => {
+            deleteRecommendationFlow(bookmark.id)
+            const newBookmarks = viewingBookmarks.filter(existingBookmark => {
+              return existingBookmark.id !== bookmark.id
+            })
+            setViewingBookmarks(newBookmarks)
+            showMessage({
+              message:"Bookmark deleted!",
+              type:"default"
+            })
+          })}
+          onExit={() => setViewingBookmarks(false)}
         />
       }
 
       {/* Recommendation FLOW */}
       {Array.isArray(recommendations) && recommendations.length > 0 && !selectingTargetPlaylist && !viewingBookmarks && !selectingPlaylist ? !targetPlaylist ? <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}}>select a target playlist</Text> :
-              <Flow
-                recommendations={recommendations}
-                onToggleMusic={async () => {
-                  setIsAudioPlaying(!isAudioPlaying)
-                  const status = await soundObject.getStatusAsync()
-                  if(status.isLoaded === false){
-                      playMusic(soundObject, recommendations[0].preview_url)
-                  } else {
-                      stopMusic(soundObject)
-                  }}}
-                onDeclineRecommendation={async () => {
-                  stopMusic(soundObject)
-                  setIsAudioPlaying(false)
-                  if(recommendations.length <= 5){
-                    console.log("Selected playlists: ", selectedPlaylistTracks);
+        <Flow
+          recommendations={recommendations}
+          onToggleMusic={async () => {
+            setIsAudioPlaying(!isAudioPlaying)
+            const status = await soundObject.getStatusAsync()
+            if(status.isLoaded === false){
+                playMusic(soundObject, recommendations[0].preview_url)
+            } else {
+                stopMusic(soundObject)
+            }}}
+          onDeclineRecommendation={async () => {
+            stopMusic(soundObject)
+            setIsAudioPlaying(false)
+            if(recommendations.length <= 5){
+              console.log("Selected playlists: ", selectedPlaylistTracks);
 
-                      const recommendations = await getRecommendationsFromPlaylist(selectedPlaylistTracks, null, null, accessToken)
-                      let nextRecommendations = recommendations.splice(1, recommendations.length)
-                      setRecommendations(nextRecommendations)
-                  } else {
-                      let nextRecommendations = recommendations.splice(1, recommendations.length)
-                      setRecommendations(nextRecommendations)
-                  }
-                 }}
-                onAcceptRecommendation={async () => {
-                  stopMusic(soundObject)
-                  setIsAudioPlaying(false)
-                  if(recommendations.length <= 5){
-                      console.log("Selected playlists: ", selectedPlaylistTracks);
-                      
-                      const recommendations = await getRecommendationsFromPlaylist(selectedPlaylistTracks, null, null, accessToken)
-                      let nextRecommendations = recommendations.splice(1, recommendations.length)
-                      setRecommendations(nextRecommendations)
-                  } else {
-                      let nextRecommendations = recommendations.splice(1, recommendations.length)
-                      setRecommendations(nextRecommendations)
-                  }
-                  addSongToPlaylist(recommendations[0].id, targetPlaylist.id, accessToken)}}
-                onBookmarkPress={() => setIsPromptVisible(true)}
-                isAudioActive={isAudioPlaying}
-              />
+                const recommendations = await getRecommendationsFromPlaylist(selectedPlaylistTracks, null, null, accessToken)
+                let nextRecommendations = recommendations.splice(1, recommendations.length)
+                setRecommendations(nextRecommendations)
+            } else {
+                let nextRecommendations = recommendations.splice(1, recommendations.length)
+                setRecommendations(nextRecommendations)
+            }
+            }}
+          onAcceptRecommendation={async () => {
+            stopMusic(soundObject)
+            setIsAudioPlaying(false)
+            if(recommendations.length <= 5){
+                console.log("Selected playlists: ", selectedPlaylistTracks);
+                
+                const recommendations = await getRecommendationsFromPlaylist(selectedPlaylistTracks, null, null, accessToken)
+                let nextRecommendations = recommendations.splice(1, recommendations.length)
+                setRecommendations(nextRecommendations)
+            } else {
+                let nextRecommendations = recommendations.splice(1, recommendations.length)
+                setRecommendations(nextRecommendations)
+            }
+            addSongToPlaylist(recommendations[0].id, targetPlaylist.id, accessToken)
+            showMessage({
+              message: `${recommendations[0].name} has been added to ${targetPlaylist.name}!`,
+              type: "success"
+            })}
+          }
+            
+          onBookmarkPress={() => setIsPromptVisible(true)}
+          onClipboardPress={async () => {
+            const docRef = await saveRecommendationFlow(seedTracks, `Untitled - ${(new Date()).toISOString().slice(0,10).replace(/-/g,"-")}`, accessToken)
+            Clipboard.setString(`https://exp.host/@gsvendsen/esp?share=${docRef.id}`);
+            showMessage({
+              message: "Link copied to clipboard!",
+              type: "success"
+            })
+          }}
+          isAudioActive={isAudioPlaying}
+        />
         : isConnected && !selectingPlaylist && !selectingTargetPlaylist && !viewingBookmarks &&  <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}} >select a source playlist</Text>
       }
       {/* View all Bookmarks BUTTON */}
-      {!selectingPlaylist && !selectingTargetPlaylist &&
+      {!selectingPlaylist && !selectingTargetPlaylist && isConnected &&
       <View style={{flex:1, position:"absolute", bottom:10, flexDirection:'row', justifyContent:'center', alignItems:'center', marginTop:20}}>
-        {!viewingBookmarks ?
+        {!viewingBookmarks &&
         <Text style={{color: 'black', marginHorizontal:15}} onPress={async () => {
           let userId = await getSpotifyUserId(accessToken)
           const query = await firestore.collection('recommendationFlows').where('userID', '==', userId).get()
           const bookmarks = query.docs.map(doc => {
-            return doc.data()
+            return {...doc.data(), id:doc.id}
           })
           setViewingBookmarks(bookmarks)
           }}>
           View bookmarked flows
-        </Text> :
-        <Text style={{color: 'black', marginHorizontal:15}} onPress={() => { setViewingBookmarks(null) }}>
-          Go back
         </Text>
       }
       </View>}
@@ -332,6 +368,8 @@ export default function App() {
 
         }
       />
+
+      <FlashMessage position="bottom" />
 
     </Wrapper>
   );
