@@ -61,15 +61,28 @@ export default Flow = (props) => {
             </TouchableOpacity>
         </View>
         
-        {/* Listen on Spotify button // Save flow */}
+        {/* Listen on Spotify button // Save flow   http://pluspng.com/img-png/spotify-logo-png-open-2000.png   Linking.openURL(recommendations[0].external_urls.spotify  */}
         <View style={{flex:1, flexDirection:'row', justifyContent:'center', alignItems:'center', marginTop:40}}>
-            <Image onPress={() => Linking.openURL(recommendations[0].external_urls.spotify)} source={{uri: 'http://pluspng.com/img-png/spotify-logo-png-open-2000.png'}} style={{width: 30, height: 30, marginHorizontal:10}} />
+            <TouchableOpacity style={{marginHorizontal:15}}
+                onPress={() => {
+                    Linking.openURL(props.recommendations[0].external_urls.spotify)
+                }}
+            >
+                <Image source={{uri: 'http://pluspng.com/img-png/spotify-logo-png-open-2000.png'}} style={{width: 30, height: 30}} />
+            </TouchableOpacity>
             <TouchableOpacity style={{marginHorizontal:15}}
                 onPress={() => {
                     props.onBookmarkPress()
                 }
             }>
-                <Image source={{uri: 'https://i.imgur.com/FAZnaRu.png'}} style={{width: 30, height: 30, marginHorizontal:10}} />
+                <Image source={{uri: 'https://i.imgur.com/FAZnaRu.png'}} style={{width: 30, height: 30, marginLeft:20}} />
+            </TouchableOpacity>
+            <TouchableOpacity style={{marginHorizontal:15}}
+                onPress={() => {
+                    props.onClipboardPress()
+                }
+            }>
+                <Image source={{uri: 'https://i.imgur.com/K5rQXfM.png'}} style={{width: 30, height: 30}} />
             </TouchableOpacity>
         </View>      
     </ScrollWrapper>
