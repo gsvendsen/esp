@@ -40,6 +40,7 @@ import { showMessage, hideMessage } from "react-native-flash-message";
 import { LinearGradient } from 'expo-linear-gradient';
 
 let soundObject = new Audio.Sound();
+var height = Dimensions.get('window').height; //full height
 
 export default function App() {
 
@@ -281,7 +282,13 @@ export default function App() {
       }
 
       {/* Recommendation FLOW */}
-      {isConnected && Array.isArray(recommendations) && recommendations.length > 0 && !selectingTargetPlaylist && !viewingBookmarks && !selectingPlaylist ? !targetPlaylist ? <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}}>select a target playlist</Text> :
+      {isConnected && Array.isArray(recommendations) && recommendations.length > 0 && !selectingTargetPlaylist && !viewingBookmarks && !selectingPlaylist ? !targetPlaylist ?
+        <>
+          <Image source={{uri: 'https://i.imgur.com/eCpfvcF.png'}} style={{position:"absolute", width: 52, height: 80, bottom:(height/2) + 50}} />
+          <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}}>select a target playlist</Text>
+        </>
+        :
+        
         <Flow
           recommendations={recommendations}
           onToggleMusic={async () => {
@@ -337,7 +344,11 @@ export default function App() {
           }}
           isAudioActive={isAudioPlaying}
         />
-        : isConnected && !selectingPlaylist && !selectingTargetPlaylist && !viewingBookmarks &&  <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}} >select a source playlist</Text>
+        : isConnected && !selectingPlaylist && !selectingTargetPlaylist && !viewingBookmarks && 
+          <>
+            <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}} >select a source playlist</Text>
+            <Image source={{uri: 'https://i.imgur.com/QHBN6Te.png'}} style={{position:"absolute", width: 52, height: 80, bottom:(height/2) + 50}} />
+          </>
       }
 
 
