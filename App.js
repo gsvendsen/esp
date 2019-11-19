@@ -220,6 +220,13 @@ export default function App() {
         }}
         selectingSource={selectingPlaylist}
         selectingTarget={selectingTargetPlaylist}
+        debugReset={() => {
+          setIsConnected(false)
+          setIsAudioPlaying(false)
+          setSelectedPlaylist([])
+          setTargetPlaylist(null)
+          setRecommendations(null)
+        }}
       />
       }
 
@@ -274,7 +281,7 @@ export default function App() {
       }
 
       {/* Recommendation FLOW */}
-      {Array.isArray(recommendations) && recommendations.length > 0 && !selectingTargetPlaylist && !viewingBookmarks && !selectingPlaylist ? !targetPlaylist ? <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}}>select a target playlist</Text> :
+      {isConnected && Array.isArray(recommendations) && recommendations.length > 0 && !selectingTargetPlaylist && !viewingBookmarks && !selectingPlaylist ? !targetPlaylist ? <Text style={{color:'grey', fontSize:16, marginVertical:10, marginHorizontal:50}}>select a target playlist</Text> :
         <Flow
           recommendations={recommendations}
           onToggleMusic={async () => {
@@ -321,7 +328,7 @@ export default function App() {
             
           onBookmarkPress={() => setIsPromptVisible(true)}
           onClipboardPress={async () => {
-            const docRef = await saveRecommendationFlow(seedTracks, `Untitled - ${(new Date()).toISOString().slice(0,10).replace(/-/g,"-")}`, accessToken)
+            const docRef = await saveRecommendationFlow(seedTracks, ``, accessToken)
             Clipboard.setString(`https://exp.host/@gsvendsen/esp?share=${docRef.id}`);
             showMessage({
               message: "URL copied to clipboard!",
@@ -388,6 +395,11 @@ export default function App() {
   
               saveRecommendationFlow(seedTracks, text, accessToken)
               setIsPromptVisible(false)
+
+              showMessage({
+                message: text === '' ? 'New Flow has been saved!' : `${text} has been saved!`,
+                type: "success"
+              })
             }
 
         }
